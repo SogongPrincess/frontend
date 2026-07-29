@@ -1,0 +1,15 @@
+@theme {
+  --color-kb-yellow-positive: #ffa800;
+  --color-kb-yellow-positive-hover: #e09700;
+  --color-kb-yellow-negative: #ffcc00;
+  --color-kb-gray: #60584c;
+  --color-kb-dark-gray: #60584c;
+  --color-kb-background: #f5f2ed;
+  --color-kb-background-soft: #faf8f5;
+  --color-kb-mid-tone: #8b7f73;
+  --color-kb-light-tone: #c4b9ad;
+  --color-kb-light-tone-2: #a59d91;
+  --color-kb-surface-secondary: #e8e2d6;
+  --color-kb-border-strong: #d4cfc8;
+  --color-kb-white: #ffffff;
+}
