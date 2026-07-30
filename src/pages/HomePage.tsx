@@ -46,21 +46,37 @@ export default function HomePage() {
 
   const assistantMessages: AssistantMessage[] = [
     {
-      text: "청년창업 대출 신청까지 마감 2일 남았어요!",
+      text: "저번에 확인한 상권 분석 다시 하러 갈까요?",
       tone: "positive",
+      to: "/startup-location",
     },
     {
-      text: "이번달 매출 리포트가 나왔어요. 잘 작인해놓겠어요?",
+      text: "이번달 매출 리포트가 나왔어요. 함께 확인해볼까요?",
       tone: "negative",
+      to: "/report",
     },
     {
       text: "사장님 조건에 맞는 지원사업 3개를 찾았어요!",
       tone: "negative",
+      to: "/finance",
     },
   ];
 
   return (
     <div className="bg-[radial-gradient(circle_at_top_left,_rgba(255,168,0,0.08),_transparent_30%),linear-gradient(135deg,_var(--color-kb-background-soft)_0%,_var(--color-kb-background)_100%)]">
+      {/* 상단 페이지 타이틀 */}
+      <div className="mx-auto max-w-6xl px-6 pt-10">
+        <PageTitle
+          title="국민카페 이사장님"
+          description="오늘도 화이팅이에요, 사장님"
+          titleClassName="text-base font-medium text-kb-mid-tone"
+          descriptionClassName="mt-1 text-3xl font-semibold text-kb-gray sm:text-4xl"
+        />
+        <p className="mt-2 text-xs text-kb-light-tone-2">
+          사업 시작한 지 D+39
+        </p>
+      </div>
+
       {/* 캐릭터 섹션 */}
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-20">
         <AssistantArea messages={assistantMessages} />
@@ -68,11 +84,6 @@ export default function HomePage() {
 
       {/* 오늘의 할일 & 최근 분석 섹션 */}
       <div className="mx-auto max-w-6xl px-6 py-12 pb-20">
-        <PageTitle
-          title="국민카페 이사장님"
-          description="오늘도 화이팅이에요, 사장님"
-          className="mb-8"
-        />
         <div className="flex flex-col gap-6 md:flex-row">
           {/* 오늘의 할일 */}
           <div className="flex-1">

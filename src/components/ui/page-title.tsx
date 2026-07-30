@@ -5,6 +5,8 @@ export interface PageTitleProps extends HTMLAttributes<HTMLDivElement> {
   title: string;
   description?: string;
   action?: ReactNode;
+  titleClassName?: string;
+  descriptionClassName?: string;
 }
 
 function PageTitle({
@@ -12,6 +14,8 @@ function PageTitle({
   description,
   action,
   className,
+  titleClassName,
+  descriptionClassName,
   ...props
 }: PageTitleProps) {
   return (
@@ -22,9 +26,14 @@ function PageTitle({
       )}
       {...props}>
       <div>
-        <h1 className="text-3xl font-semibold text-kb-gray">{title}</h1>
+        <h1
+          className={cn("text-xl font-semibold text-kb-gray", titleClassName)}>
+          {title}
+        </h1>
         {description && (
-          <p className="mt-3 text-kb-mid-tone">{description}</p>
+          <p className={cn("mt-3 text-kb-mid-tone", descriptionClassName)}>
+            {description}
+          </p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
