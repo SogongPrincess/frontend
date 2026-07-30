@@ -1,13 +1,23 @@
 import { useMutation } from "@tanstack/react-query";
 import api from "@/lib/api";
 
+export type BizStage = "prep" | "early" | "operating" | "crisis" | "reboot";
+
+export type BizRegistrationStatus =
+  | "continuing"
+  | "closed"
+  | "suspended"
+  | "unknown";
+
+export type BusinessType = "individual" | "corporation" | null;
+
 export interface RecommendationRequest {
   trigger: {
     type: "onboarding_complete";
     userId: string;
   };
   profile: {
-    biz_stage: string;
+    biz_stage: BizStage;
     industry: string[];
     region: string;
     needed_amount: number;
@@ -15,16 +25,16 @@ export interface RecommendationRequest {
     credit_score_range: {
       min: number;
       max: number;
-    };
+    } | null;
     has_debt: boolean;
     existing_loan_amount: number;
     collateral_available: boolean;
     monthly_repayment_capacity: number;
-    biz_registration_status: string;
+    biz_registration_status: BizRegistrationStatus;
     preferential_tags: string[];
     completed_credit_education: boolean;
     existing_loan_rate: number;
-    business_type: string;
+    business_type: BusinessType;
     funding_purpose: string;
   };
   needed_amount: {

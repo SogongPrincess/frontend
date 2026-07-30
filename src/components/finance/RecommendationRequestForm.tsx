@@ -4,11 +4,114 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   useRecommendationsMutation,
+  type BizRegistrationStatus,
+  type BizStage,
+  type BusinessType,
   type RecommendationRequest,
   type RecommendationsResponse,
 } from "@/lib/recommendations";
+
+const INDUSTRY_OPTIONS = ["카페", "베이커리", "식당"];
+
+const PREFERENTIAL_TAG_OPTIONS = [
+  "청년",
+  "여성기업",
+  "장애인기업",
+  "사회적기업",
+  "재창업",
+  "저소득층",
+  "다문화가정",
+  "경력단절여성",
+];
+
+function formatMoneyInput(raw: string): string {
+  const digitsOnly = raw.replace(/[^0-9]/g, "");
+  return digitsOnly === "" ? "" : Number(digitsOnly).toLocaleString("ko-KR");
+}
+
+function parseMoneyInput(value: string): number {
+  const digitsOnly = value.replace(/[^0-9]/g, "");
+  return digitsOnly === "" ? 0 : Number(digitsOnly);
+}
+
+function formatKoreanWon(amount: number): string {
+  if (amount === 0) return "0원";
+  const eok = Math.floor(amount / 100_000_000);
+  const man = Math.floor((amount % 100_000_000) / 10_000);
+  const rest = amount % 10_000;
+  const parts: string[] = [];
+  if (eok > 0) parts.push(`${eok.toLocaleString("ko-KR")}억`);
+  if (man > 0) parts.push(`${man.toLocaleString("ko-KR")}만`);
+  if (rest > 0) parts.push(`${rest.toLocaleString("ko-KR")}`);
+  return `${parts.join(" ")}원`;
+}
+
+function moneyHint(value: string, extra?: string): string | undefined {
+  if (value.trim() === "") return extra;
+  const reading = formatKoreanWon(parseMoneyInput(value));
+  return extra ? `${reading} · ${extra}` : reading;
+}
+
+const KOREA_REGIONS = [
+  "서울특별시",
+  "부산광역시",
+  "대구광역시",
+  "인천광역시",
+  "광주광역시",
+  "대전광역시",
+  "울산광역시",
+  "세종특별자치시",
+  "경기도",
+  "강원특별자치도",
+  "충청북도",
+  "충청남도",
+  "전북특별자치도",
+  "전라남도",
+  "경상북도",
+  "경상남도",
+  "제주특별자치도",
+];
+
+const BIZ_STAGE_OPTIONS: { value: BizStage; label: string }[] = [
+  { value: "prep", label: "예비창업자" },
+  { value: "early", label: "창업초기" },
+  { value: "operating", label: "운영중" },
+  { value: "crisis", label: "경영위기" },
+  { value: "reboot", label: "재창업" },
+];
+
+const BIZ_REGISTRATION_STATUS_OPTIONS: {
+  value: BizRegistrationStatus;
+  label: string;
+}[] = [
+  { value: "continuing", label: "계속사업자" },
+  { value: "closed", label: "폐업" },
+  { value: "suspended", label: "휴업" },
+  { value: "unknown", label: "알 수 없음" },
+];
+
+const CREDIT_SCORE_BUCKETS = {
+  "900+": { min: 900, max: 1000 },
+  "800-899": { min: 800, max: 899 },
+  "700-799": { min: 700, max: 799 },
+  unknown: null,
+} as const satisfies Record<
+  string,
+  { min: number; max: number } | null
+>;
+
+type CreditScoreBucket = keyof typeof CREDIT_SCORE_BUCKETS;
+
+const CREDIT_SCORE_BUCKET_OPTIONS: { value: CreditScoreBucket; label: string }[] =
+  [
+    { value: "900+", label: "900점 이상" },
+    { value: "800-899", label: "800~899점" },
+    { value: "700-799", label: "700~799점" },
+    { value: "unknown", label: "잘 모르겠어요" },
+  ];
 
 interface FormState {
   userId: string;
@@ -17,22 +120,26 @@ interface FormState {
   bizRegistrationStatus: string;
   businessType: string;
   fundingPurpose: string;
-  industry: string;
-  preferentialTags: string;
+  industry: string[];
+  preferentialTags: string[];
+  preferentialTagsOther: string;
   appliedProductNames: string;
   hasDebt: string;
   existingLoanAmount: string;
   existingLoanRate: string;
   collateralAvailable: string;
   completedCreditEducation: string;
-  creditScoreMin: string;
-  creditScoreMax: string;
+  creditScoreBucket: CreditScoreBucket;
   neededAmount: string;
   selfCapital: string;
   monthlyRepaymentCapacity: string;
   estimatedInitialCost: string;
   userReportedAmount: string;
 }
+
+type StringFieldKey = {
+  [K in keyof FormState]: FormState[K] extends string ? K : never;
+}[keyof FormState];
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
@@ -43,16 +150,16 @@ const initialForm: FormState = {
   bizRegistrationStatus: "",
   businessType: "",
   fundingPurpose: "",
-  industry: "",
-  preferentialTags: "",
+  industry: [],
+  preferentialTags: [],
+  preferentialTagsOther: "",
   appliedProductNames: "",
   hasDebt: "false",
   existingLoanAmount: "",
   existingLoanRate: "",
   collateralAvailable: "false",
   completedCreditEducation: "false",
-  creditScoreMin: "",
-  creditScoreMax: "",
+  creditScoreBucket: "unknown",
   neededAmount: "",
   selfCapital: "",
   monthlyRepaymentCapacity: "",
@@ -60,25 +167,22 @@ const initialForm: FormState = {
   userReportedAmount: "",
 };
 
-const REQUIRED_TEXT_FIELDS: (keyof FormState)[] = [
+const REQUIRED_TEXT_FIELDS: StringFieldKey[] = [
   "userId",
   "region",
   "bizStage",
   "bizRegistrationStatus",
-  "businessType",
   "fundingPurpose",
 ];
 
-const REQUIRED_NUMBER_FIELDS: (keyof FormState)[] = [
-  "creditScoreMin",
-  "creditScoreMax",
+const REQUIRED_NUMBER_FIELDS: StringFieldKey[] = [
   "neededAmount",
   "selfCapital",
   "monthlyRepaymentCapacity",
   "userReportedAmount",
 ];
 
-const OPTIONAL_NUMBER_FIELDS: (keyof FormState)[] = [
+const OPTIONAL_NUMBER_FIELDS: StringFieldKey[] = [
   "existingLoanAmount",
   "existingLoanRate",
   "estimatedInitialCost",
@@ -92,7 +196,8 @@ function parseList(value: string): string[] {
 }
 
 function toNumber(value: string): number {
-  return value.trim() === "" ? 0 : Number(value);
+  const normalized = value.replace(/,/g, "").trim();
+  return normalized === "" ? 0 : Number(normalized);
 }
 
 function validate(form: FormState): FormErrors {
@@ -105,25 +210,19 @@ function validate(form: FormState): FormErrors {
   }
 
   for (const key of REQUIRED_NUMBER_FIELDS) {
-    if (form[key].trim() === "") {
+    const normalized = form[key].replace(/,/g, "").trim();
+    if (normalized === "") {
       errors[key] = "필수 입력 항목입니다.";
-    } else if (Number.isNaN(Number(form[key]))) {
+    } else if (Number.isNaN(Number(normalized))) {
       errors[key] = "숫자만 입력해주세요.";
     }
   }
 
   for (const key of OPTIONAL_NUMBER_FIELDS) {
-    if (form[key].trim() !== "" && Number.isNaN(Number(form[key]))) {
+    const normalized = form[key].replace(/,/g, "").trim();
+    if (normalized !== "" && Number.isNaN(Number(normalized))) {
       errors[key] = "숫자만 입력해주세요.";
     }
-  }
-
-  if (
-    !errors.creditScoreMin &&
-    !errors.creditScoreMax &&
-    Number(form.creditScoreMin) > Number(form.creditScoreMax)
-  ) {
-    errors.creditScoreMax = "최댓값은 최솟값보다 작을 수 없습니다.";
   }
 
   return errors;
@@ -136,24 +235,26 @@ function buildPayload(form: FormState): RecommendationRequest {
       userId: form.userId.trim(),
     },
     profile: {
-      biz_stage: form.bizStage.trim(),
-      industry: parseList(form.industry),
+      biz_stage: form.bizStage as BizStage,
+      industry: form.industry,
       region: form.region.trim(),
       needed_amount: toNumber(form.neededAmount),
       self_capital: toNumber(form.selfCapital),
-      credit_score_range: {
-        min: toNumber(form.creditScoreMin),
-        max: toNumber(form.creditScoreMax),
-      },
+      credit_score_range: CREDIT_SCORE_BUCKETS[form.creditScoreBucket],
       has_debt: form.hasDebt === "true",
       existing_loan_amount: toNumber(form.existingLoanAmount),
       collateral_available: form.collateralAvailable === "true",
       monthly_repayment_capacity: toNumber(form.monthlyRepaymentCapacity),
-      biz_registration_status: form.bizRegistrationStatus.trim(),
-      preferential_tags: parseList(form.preferentialTags),
+      biz_registration_status: form.bizRegistrationStatus as BizRegistrationStatus,
+      preferential_tags: [
+        ...form.preferentialTags,
+        ...parseList(form.preferentialTagsOther),
+      ],
       completed_credit_education: form.completedCreditEducation === "true",
       existing_loan_rate: toNumber(form.existingLoanRate),
-      business_type: form.businessType.trim(),
+      business_type: (form.businessType === ""
+        ? null
+        : form.businessType) as BusinessType,
       funding_purpose: form.fundingPurpose.trim(),
     },
     needed_amount: {
@@ -172,15 +273,18 @@ function Field({
   error,
   hint,
   children,
+  as = "label",
 }: {
   label: string;
   required?: boolean;
   error?: string;
   hint?: string;
   children: ReactNode;
+  as?: "label" | "div";
 }) {
+  const Wrapper = as;
   return (
-    <label className="flex flex-col gap-1.5">
+    <Wrapper className="flex flex-col gap-1.5">
       <span className="text-sm font-medium text-kb-gray">
         {label}
         {required && <span className="ml-1 text-kb-yellow-positive-hover">*</span>}
@@ -191,7 +295,7 @@ function Field({
       ) : (
         hint && <span className="text-xs text-kb-mid-tone">{hint}</span>
       )}
-    </label>
+    </Wrapper>
   );
 }
 
@@ -200,6 +304,38 @@ function SectionHeading({ children }: { children: ReactNode }) {
     <h2 className="text-base font-semibold text-kb-gray border-b border-kb-surface-secondary pb-2">
       {children}
     </h2>
+  );
+}
+
+function ToggleChipGroup({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const isSelected = selected.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onToggle(option)}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-sm transition-colors",
+              isSelected
+                ? "border-kb-yellow-positive bg-kb-yellow-positive text-white"
+                : "border-kb-border-strong bg-kb-white text-kb-gray hover:bg-kb-background",
+            )}>
+            {option}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -261,12 +397,37 @@ export function RecommendationRequestForm() {
   const recommendationsMutation = useRecommendationsMutation();
 
   const handleChange =
-    (key: keyof FormState) =>
+    (key: StringFieldKey) =>
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { value } = e.target;
       setForm((prev) => ({ ...prev, [key]: value }));
       setErrors((prev) => ({ ...prev, [key]: undefined }));
     };
+
+  const handleMoneyChange =
+    (key: StringFieldKey) => (e: ChangeEvent<HTMLInputElement>) => {
+      const formatted = formatMoneyInput(e.target.value);
+      setForm((prev) => ({ ...prev, [key]: formatted }));
+      setErrors((prev) => ({ ...prev, [key]: undefined }));
+    };
+
+  const toggleIndustry = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      industry: prev.industry.includes(value)
+        ? prev.industry.filter((item) => item !== value)
+        : [...prev.industry, value],
+    }));
+  };
+
+  const togglePreferentialTag = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      preferentialTags: prev.preferentialTags.includes(value)
+        ? prev.preferentialTags.filter((item) => item !== value)
+        : [...prev.preferentialTags, value],
+    }));
+  };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -311,36 +472,57 @@ export function RecommendationRequestForm() {
             />
           </Field>
           <Field label="지역" required error={errors.region}>
-            <Input
-              value={form.region}
-              onChange={handleChange("region")}
-              placeholder="예: 서울"
-            />
+            <Select value={form.region} onChange={handleChange("region")}>
+              <option value="" disabled>
+                선택해주세요
+              </option>
+              {KOREA_REGIONS.map((region) => (
+                <option key={region} value={region}>
+                  {region}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="사업 단계" required error={errors.bizStage}>
-            <Input
-              value={form.bizStage}
-              onChange={handleChange("bizStage")}
-              placeholder="예: prep"
-            />
+            <Select value={form.bizStage} onChange={handleChange("bizStage")}>
+              <option value="" disabled>
+                선택해주세요
+              </option>
+              {BIZ_STAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field
             label="사업자 등록 상태"
             required
             error={errors.bizRegistrationStatus}
           >
-            <Input
+            <Select
               value={form.bizRegistrationStatus}
               onChange={handleChange("bizRegistrationStatus")}
-              placeholder="예: continuing"
-            />
+            >
+              <option value="" disabled>
+                선택해주세요
+              </option>
+              {BIZ_REGISTRATION_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </Field>
-          <Field label="사업자 유형" required error={errors.businessType}>
-            <Input
+          <Field label="사업자 유형" error={errors.businessType}>
+            <Select
               value={form.businessType}
               onChange={handleChange("businessType")}
-              placeholder="예: individual"
-            />
+            >
+              <option value="">선택 안 함</option>
+              <option value="individual">개인사업자</option>
+              <option value="corporation">법인</option>
+            </Select>
           </Field>
           <Field label="자금 용도" required error={errors.fundingPurpose}>
             <Input
@@ -355,18 +537,11 @@ export function RecommendationRequestForm() {
       <div className="flex flex-col gap-4">
         <SectionHeading>산업 및 우대 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="업종" hint="쉼표(,)로 구분해 입력">
-            <Input
-              value={form.industry}
-              onChange={handleChange("industry")}
-              placeholder="예: IT, 요식업"
-            />
-          </Field>
-          <Field label="우대 태그" hint="쉼표(,)로 구분해 입력">
-            <Input
-              value={form.preferentialTags}
-              onChange={handleChange("preferentialTags")}
-              placeholder="예: 청년, 여성기업"
+          <Field label="업종" as="div">
+            <ToggleChipGroup
+              options={INDUSTRY_OPTIONS}
+              selected={form.industry}
+              onToggle={toggleIndustry}
             />
           </Field>
           <Field
@@ -381,26 +556,39 @@ export function RecommendationRequestForm() {
             />
           </Field>
         </div>
+        <Field label="우대 태그" as="div">
+          <ToggleChipGroup
+            options={PREFERENTIAL_TAG_OPTIONS}
+            selected={form.preferentialTags}
+            onToggle={togglePreferentialTag}
+          />
+        </Field>
+        <Field
+          label="기타 우대 태그"
+          hint="목록에 없는 우대조건은 쉼표(,)로 구분해 직접 입력"
+        >
+          <Input
+            value={form.preferentialTagsOther}
+            onChange={handleChange("preferentialTagsOther")}
+            placeholder="예: 장애인, 국가유공자"
+          />
+        </Field>
       </div>
 
       <div className="flex flex-col gap-4">
         <SectionHeading>신용 및 부채 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="신용점수 최솟값" required error={errors.creditScoreMin}>
-            <Input
-              type="number"
-              value={form.creditScoreMin}
-              onChange={handleChange("creditScoreMin")}
-              placeholder="예: 800"
-            />
-          </Field>
-          <Field label="신용점수 최댓값" required error={errors.creditScoreMax}>
-            <Input
-              type="number"
-              value={form.creditScoreMax}
-              onChange={handleChange("creditScoreMax")}
-              placeholder="예: 899"
-            />
+          <Field label="신용점수">
+            <Select
+              value={form.creditScoreBucket}
+              onChange={handleChange("creditScoreBucket")}
+            >
+              {CREDIT_SCORE_BUCKET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="기존 부채 보유 여부">
             <Select value={form.hasDebt} onChange={handleChange("hasDebt")}>
@@ -411,13 +599,13 @@ export function RecommendationRequestForm() {
           <Field
             label="기존 대출 금액"
             error={errors.existingLoanAmount}
-            hint="원 단위"
+            hint={moneyHint(form.existingLoanAmount)}
           >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.existingLoanAmount}
-              onChange={handleChange("existingLoanAmount")}
-              placeholder="예: 5000000"
+              onChange={handleMoneyChange("existingLoanAmount")}
+              placeholder="예: 5,000,000"
             />
           </Field>
           <Field
@@ -457,58 +645,68 @@ export function RecommendationRequestForm() {
       <div className="flex flex-col gap-4">
         <SectionHeading>자금 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="필요 자금" required error={errors.neededAmount} hint="원 단위">
+          <Field
+            label="필요 자금"
+            required
+            error={errors.neededAmount}
+            hint={moneyHint(form.neededAmount)}
+          >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.neededAmount}
-              onChange={handleChange("neededAmount")}
-              placeholder="예: 30000000"
+              onChange={handleMoneyChange("neededAmount")}
+              placeholder="예: 30,000,000"
             />
           </Field>
-          <Field label="자기 자본" required error={errors.selfCapital} hint="원 단위">
+          <Field
+            label="자기 자본"
+            required
+            error={errors.selfCapital}
+            hint={moneyHint(form.selfCapital)}
+          >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.selfCapital}
-              onChange={handleChange("selfCapital")}
-              placeholder="예: 10000000"
+              onChange={handleMoneyChange("selfCapital")}
+              placeholder="예: 10,000,000"
             />
           </Field>
           <Field
             label="월 상환 여력"
             required
             error={errors.monthlyRepaymentCapacity}
-            hint="원 단위"
+            hint={moneyHint(form.monthlyRepaymentCapacity)}
           >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.monthlyRepaymentCapacity}
-              onChange={handleChange("monthlyRepaymentCapacity")}
-              placeholder="예: 500000"
+              onChange={handleMoneyChange("monthlyRepaymentCapacity")}
+              placeholder="예: 500,000"
             />
           </Field>
           <Field
             label="시장 분석 추정 창업 비용"
             error={errors.estimatedInitialCost}
-            hint="원 단위, 시장 분석 기반 추정치"
+            hint={moneyHint(form.estimatedInitialCost, "시장 분석 기반 추정치")}
           >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.estimatedInitialCost}
-              onChange={handleChange("estimatedInitialCost")}
-              placeholder="예: 25000000"
+              onChange={handleMoneyChange("estimatedInitialCost")}
+              placeholder="예: 25,000,000"
             />
           </Field>
           <Field
             label="사용자 입력 필요 자금"
             required
             error={errors.userReportedAmount}
-            hint="원 단위, 사용자가 직접 입력한 금액"
+            hint={moneyHint(form.userReportedAmount, "사용자가 직접 입력한 금액")}
           >
             <Input
-              type="number"
+              inputMode="numeric"
               value={form.userReportedAmount}
-              onChange={handleChange("userReportedAmount")}
-              placeholder="예: 30000000"
+              onChange={handleMoneyChange("userReportedAmount")}
+              placeholder="예: 30,000,000"
             />
           </Field>
         </div>
