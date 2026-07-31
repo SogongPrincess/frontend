@@ -9,7 +9,6 @@ import {
   useRecommendationsMutation,
   type BizRegistrationStatus,
   type BizStage,
-  type BusinessType,
   type RecommendationRequest,
   type RecommendationsResponse,
 } from "@/lib/recommendations";
@@ -17,13 +16,13 @@ import {
 const INDUSTRY_OPTIONS = ["카페", "베이커리", "식당"];
 
 const PREFERENTIAL_TAG_OPTIONS = [
-  "청년",
-  "여성기업",
-  "장애인기업",
-  "사회적기업",
-  "재창업",
-  "저소득층",
+  "장애인",
+  "기초생활수급자",
+  "한부모가정",
   "다문화가정",
+  "청년",
+  "고령자",
+  "사회적기업",
   "경력단절여성",
 ];
 
@@ -88,16 +87,6 @@ const BIZ_STAGE_OPTIONS: { value: BizStage; label: string }[] = [
   { value: "reboot", label: "재창업" },
 ];
 
-const BIZ_REGISTRATION_STATUS_OPTIONS: {
-  value: BizRegistrationStatus;
-  label: string;
-}[] = [
-  { value: "continuing", label: "계속사업자" },
-  { value: "closed", label: "폐업" },
-  { value: "suspended", label: "휴업" },
-  { value: "unknown", label: "알 수 없음" },
-];
-
 const CREDIT_SCORE_BUCKETS = {
   "900+": { min: 900, max: 1000 },
   "800-899": { min: 800, max: 899 },
@@ -119,15 +108,11 @@ const CREDIT_SCORE_BUCKET_OPTIONS: { value: CreditScoreBucket; label: string }[]
   ];
 
 interface FormState {
-  userId: string;
   region: string;
   bizStage: string;
-  bizRegistrationStatus: string;
-  businessType: string;
   fundingPurpose: string;
   industry: string[];
   preferentialTags: string[];
-  preferentialTagsOther: string;
   appliedProductNames: string;
   hasDebt: string;
   existingLoanAmount: string;
@@ -135,10 +120,8 @@ interface FormState {
   collateralAvailable: string;
   completedCreditEducation: string;
   creditScoreBucket: CreditScoreBucket;
-  neededAmount: string;
   selfCapital: string;
   monthlyRepaymentCapacity: string;
-  estimatedInitialCost: string;
   userReportedAmount: string;
 }
 
@@ -149,15 +132,11 @@ type StringFieldKey = {
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 const initialForm: FormState = {
-  userId: "",
   region: "",
   bizStage: "",
-  bizRegistrationStatus: "",
-  businessType: "",
   fundingPurpose: "",
   industry: [],
   preferentialTags: [],
-  preferentialTagsOther: "",
   appliedProductNames: "",
   hasDebt: "false",
   existingLoanAmount: "",
@@ -165,32 +144,20 @@ const initialForm: FormState = {
   collateralAvailable: "false",
   completedCreditEducation: "false",
   creditScoreBucket: "unknown",
-  neededAmount: "",
   selfCapital: "",
   monthlyRepaymentCapacity: "",
-  estimatedInitialCost: "",
   userReportedAmount: "",
 };
 
-const REQUIRED_TEXT_FIELDS: StringFieldKey[] = [
-  "userId",
-  "region",
-  "bizStage",
-  "bizRegistrationStatus",
-  "fundingPurpose",
-];
+const REQUIRED_TEXT_FIELDS: StringFieldKey[] = ["region", "bizStage"];
 
-const REQUIRED_NUMBER_FIELDS: StringFieldKey[] = [
-  "neededAmount",
-  "selfCapital",
-  "monthlyRepaymentCapacity",
-  "userReportedAmount",
-];
+const REQUIRED_NUMBER_FIELDS: StringFieldKey[] = ["userReportedAmount"];
 
 const OPTIONAL_NUMBER_FIELDS: StringFieldKey[] = [
   "existingLoanAmount",
   "existingLoanRate",
-  "estimatedInitialCost",
+  "selfCapital",
+  "monthlyRepaymentCapacity",
 ];
 
 function parseList(value: string): string[] {
@@ -234,37 +201,42 @@ function validate(form: FormState): FormErrors {
 }
 
 function buildPayload(form: FormState): RecommendationRequest {
+  const hasSelfCapital = form.selfCapital.trim() !== "";
+  const hasMonthlyRepaymentCapacity = form.monthlyRepaymentCapacity.trim() !== "";
+  const hasFundingPurpose = form.fundingPurpose.trim() !== "";
+
   return {
     trigger: {
       type: "onboarding_complete",
-      userId: form.userId.trim(),
+      // 어떤 값을 넣어도 결과에 영향이 없어 고정값으로 보낸다.
+      userId: "guest",
     },
     profile: {
       biz_stage: form.bizStage as BizStage,
       industry: form.industry,
       region: form.region.trim(),
-      needed_amount: toWon(form.neededAmount),
-      self_capital: toWon(form.selfCapital),
+      // 서버가 수신 즉시 재계산하는 값이라 항상 0으로 보낸다.
+      needed_amount: 0,
+      self_capital: hasSelfCapital ? toWon(form.selfCapital) : null,
       credit_score_range: CREDIT_SCORE_BUCKETS[form.creditScoreBucket],
       has_debt: form.hasDebt === "true",
       existing_loan_amount: toWon(form.existingLoanAmount),
       collateral_available: form.collateralAvailable === "true",
-      monthly_repayment_capacity: toWon(form.monthlyRepaymentCapacity),
-      biz_registration_status: form.bizRegistrationStatus as BizRegistrationStatus,
-      preferential_tags: [
-        ...form.preferentialTags,
-        ...parseList(form.preferentialTagsOther),
-      ],
+      monthly_repayment_capacity: hasMonthlyRepaymentCapacity
+        ? toWon(form.monthlyRepaymentCapacity)
+        : null,
+      // 국세청 연동 전까지는 자동조회 대신 unknown으로 고정한다.
+      biz_registration_status: "unknown" as BizRegistrationStatus,
+      preferential_tags: form.preferentialTags,
       completed_credit_education: form.completedCreditEducation === "true",
       existing_loan_rate: toNumber(form.existingLoanRate),
-      business_type: (form.businessType === ""
-        ? null
-        : form.businessType) as BusinessType,
-      funding_purpose: form.fundingPurpose.trim(),
+      business_type: null,
+      funding_purpose: hasFundingPurpose ? form.fundingPurpose.trim() : null,
     },
     needed_amount: {
       market_analysis_estimate: {
-        estimated_initial_cost: toWon(form.estimatedInitialCost),
+        // 상권분석 연동 전까지는 값 없이 null로 보낸다.
+        estimated_initial_cost: null,
       },
       user_reported_amount: toWon(form.userReportedAmount),
     },
@@ -469,13 +441,6 @@ export function RecommendationRequestForm() {
       <div className="flex flex-col gap-4">
         <SectionHeading>기본 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="사용자 ID" required error={errors.userId}>
-            <Input
-              value={form.userId}
-              onChange={handleChange("userId")}
-              placeholder="예: user-1234"
-            />
-          </Field>
           <Field label="지역" required error={errors.region}>
             <Select value={form.region} onChange={handleChange("region")}>
               <option value="" disabled>
@@ -500,36 +465,7 @@ export function RecommendationRequestForm() {
               ))}
             </Select>
           </Field>
-          <Field
-            label="사업자 등록 상태"
-            required
-            error={errors.bizRegistrationStatus}
-          >
-            <Select
-              value={form.bizRegistrationStatus}
-              onChange={handleChange("bizRegistrationStatus")}
-            >
-              <option value="" disabled>
-                선택해주세요
-              </option>
-              {BIZ_REGISTRATION_STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="사업자 유형" error={errors.businessType}>
-            <Select
-              value={form.businessType}
-              onChange={handleChange("businessType")}
-            >
-              <option value="">선택 안 함</option>
-              <option value="individual">개인사업자</option>
-              <option value="corporation">법인</option>
-            </Select>
-          </Field>
-          <Field label="자금 용도" required error={errors.fundingPurpose}>
+          <Field label="자금 용도" error={errors.fundingPurpose}>
             <Input
               value={form.fundingPurpose}
               onChange={handleChange("fundingPurpose")}
@@ -566,16 +502,6 @@ export function RecommendationRequestForm() {
             options={PREFERENTIAL_TAG_OPTIONS}
             selected={form.preferentialTags}
             onToggle={togglePreferentialTag}
-          />
-        </Field>
-        <Field
-          label="기타 우대 태그"
-          hint="목록에 없는 우대조건은 쉼표(,)로 구분해 직접 입력"
-        >
-          <Input
-            value={form.preferentialTagsOther}
-            onChange={handleChange("preferentialTagsOther")}
-            placeholder="예: 장애인, 국가유공자"
           />
         </Field>
       </div>
@@ -651,21 +577,7 @@ export function RecommendationRequestForm() {
         <SectionHeading>자금 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
-            label="필요 자금 (만원)"
-            required
-            error={errors.neededAmount}
-            hint={moneyHint(form.neededAmount)}
-          >
-            <Input
-              inputMode="numeric"
-              value={form.neededAmount}
-              onChange={handleMoneyChange("neededAmount")}
-              placeholder="예: 3,000"
-            />
-          </Field>
-          <Field
             label="자기 자본 (만원)"
-            required
             error={errors.selfCapital}
             hint={moneyHint(form.selfCapital)}
           >
@@ -678,7 +590,6 @@ export function RecommendationRequestForm() {
           </Field>
           <Field
             label="월 상환 여력 (만원)"
-            required
             error={errors.monthlyRepaymentCapacity}
             hint={moneyHint(form.monthlyRepaymentCapacity)}
           >
@@ -687,18 +598,6 @@ export function RecommendationRequestForm() {
               value={form.monthlyRepaymentCapacity}
               onChange={handleMoneyChange("monthlyRepaymentCapacity")}
               placeholder="예: 50"
-            />
-          </Field>
-          <Field
-            label="시장 분석 추정 창업 비용 (만원)"
-            error={errors.estimatedInitialCost}
-            hint={moneyHint(form.estimatedInitialCost, "시장 분석 기반 추정치")}
-          >
-            <Input
-              inputMode="numeric"
-              value={form.estimatedInitialCost}
-              onChange={handleMoneyChange("estimatedInitialCost")}
-              placeholder="예: 2,500"
             />
           </Field>
           <Field
