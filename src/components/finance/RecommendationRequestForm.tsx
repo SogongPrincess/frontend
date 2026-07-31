@@ -37,6 +37,11 @@ function parseMoneyInput(value: string): number {
   return digitsOnly === "" ? 0 : Number(digitsOnly);
 }
 
+// 입력값의 단위는 만원이므로 원 단위로 변환한다.
+function toWon(value: string): number {
+  return parseMoneyInput(value) * 10_000;
+}
+
 function formatKoreanWon(amount: number): string {
   if (amount === 0) return "0원";
   const eok = Math.floor(amount / 100_000_000);
@@ -51,7 +56,7 @@ function formatKoreanWon(amount: number): string {
 
 function moneyHint(value: string, extra?: string): string | undefined {
   if (value.trim() === "") return extra;
-  const reading = formatKoreanWon(parseMoneyInput(value));
+  const reading = formatKoreanWon(toWon(value));
   return extra ? `${reading} · ${extra}` : reading;
 }
 
@@ -238,13 +243,13 @@ function buildPayload(form: FormState): RecommendationRequest {
       biz_stage: form.bizStage as BizStage,
       industry: form.industry,
       region: form.region.trim(),
-      needed_amount: toNumber(form.neededAmount),
-      self_capital: toNumber(form.selfCapital),
+      needed_amount: toWon(form.neededAmount),
+      self_capital: toWon(form.selfCapital),
       credit_score_range: CREDIT_SCORE_BUCKETS[form.creditScoreBucket],
       has_debt: form.hasDebt === "true",
-      existing_loan_amount: toNumber(form.existingLoanAmount),
+      existing_loan_amount: toWon(form.existingLoanAmount),
       collateral_available: form.collateralAvailable === "true",
-      monthly_repayment_capacity: toNumber(form.monthlyRepaymentCapacity),
+      monthly_repayment_capacity: toWon(form.monthlyRepaymentCapacity),
       biz_registration_status: form.bizRegistrationStatus as BizRegistrationStatus,
       preferential_tags: [
         ...form.preferentialTags,
@@ -259,9 +264,9 @@ function buildPayload(form: FormState): RecommendationRequest {
     },
     needed_amount: {
       market_analysis_estimate: {
-        estimated_initial_cost: toNumber(form.estimatedInitialCost),
+        estimated_initial_cost: toWon(form.estimatedInitialCost),
       },
-      user_reported_amount: toNumber(form.userReportedAmount),
+      user_reported_amount: toWon(form.userReportedAmount),
     },
     applied_product_names: parseList(form.appliedProductNames),
   };
@@ -597,7 +602,7 @@ export function RecommendationRequestForm() {
             </Select>
           </Field>
           <Field
-            label="기존 대출 금액"
+            label="기존 대출 금액 (만원)"
             error={errors.existingLoanAmount}
             hint={moneyHint(form.existingLoanAmount)}
           >
@@ -605,7 +610,7 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.existingLoanAmount}
               onChange={handleMoneyChange("existingLoanAmount")}
-              placeholder="예: 5,000,000"
+              placeholder="예: 500"
             />
           </Field>
           <Field
@@ -646,7 +651,7 @@ export function RecommendationRequestForm() {
         <SectionHeading>자금 정보</SectionHeading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
-            label="필요 자금"
+            label="필요 자금 (만원)"
             required
             error={errors.neededAmount}
             hint={moneyHint(form.neededAmount)}
@@ -655,11 +660,11 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.neededAmount}
               onChange={handleMoneyChange("neededAmount")}
-              placeholder="예: 30,000,000"
+              placeholder="예: 3,000"
             />
           </Field>
           <Field
-            label="자기 자본"
+            label="자기 자본 (만원)"
             required
             error={errors.selfCapital}
             hint={moneyHint(form.selfCapital)}
@@ -668,11 +673,11 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.selfCapital}
               onChange={handleMoneyChange("selfCapital")}
-              placeholder="예: 10,000,000"
+              placeholder="예: 1,000"
             />
           </Field>
           <Field
-            label="월 상환 여력"
+            label="월 상환 여력 (만원)"
             required
             error={errors.monthlyRepaymentCapacity}
             hint={moneyHint(form.monthlyRepaymentCapacity)}
@@ -681,11 +686,11 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.monthlyRepaymentCapacity}
               onChange={handleMoneyChange("monthlyRepaymentCapacity")}
-              placeholder="예: 500,000"
+              placeholder="예: 50"
             />
           </Field>
           <Field
-            label="시장 분석 추정 창업 비용"
+            label="시장 분석 추정 창업 비용 (만원)"
             error={errors.estimatedInitialCost}
             hint={moneyHint(form.estimatedInitialCost, "시장 분석 기반 추정치")}
           >
@@ -693,11 +698,11 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.estimatedInitialCost}
               onChange={handleMoneyChange("estimatedInitialCost")}
-              placeholder="예: 25,000,000"
+              placeholder="예: 2,500"
             />
           </Field>
           <Field
-            label="사용자 입력 필요 자금"
+            label="사용자 입력 필요 자금 (만원)"
             required
             error={errors.userReportedAmount}
             hint={moneyHint(form.userReportedAmount, "사용자가 직접 입력한 금액")}
@@ -706,7 +711,7 @@ export function RecommendationRequestForm() {
               inputMode="numeric"
               value={form.userReportedAmount}
               onChange={handleMoneyChange("userReportedAmount")}
-              placeholder="예: 30,000,000"
+              placeholder="예: 3,000"
             />
           </Field>
         </div>
