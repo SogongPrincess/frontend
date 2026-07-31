@@ -21,7 +21,7 @@ export interface RecommendationRequest {
     industry: string[];
     region: string;
     needed_amount: number;
-    self_capital: number;
+    self_capital: number | null;
     credit_score_range: {
       min: number;
       max: number;
@@ -29,19 +29,19 @@ export interface RecommendationRequest {
     has_debt: boolean;
     existing_loan_amount: number;
     collateral_available: boolean;
-    monthly_repayment_capacity: number;
+    monthly_repayment_capacity: number | null;
     biz_registration_status: BizRegistrationStatus;
     preferential_tags: string[];
     completed_credit_education: boolean;
     existing_loan_rate: number;
     business_type: BusinessType;
-    funding_purpose: string;
+    funding_purpose: string | null;
   };
   needed_amount: {
     market_analysis_estimate: {
-      estimated_initial_cost: number;
+      estimated_initial_cost: number | null;
     };
-    user_reported_amount: number;
+    user_reported_amount: number | null;
   };
   applied_product_names: string[];
 }
